@@ -4,6 +4,30 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      build_desktop:
+        description: '是否编译 Desktop 桌面端'
+        default: false
+        type: boolean
+      build_cli:
+        description: '是否编译 CLI 命令行工具'
+        default: true
+        type: boolean
+      cli_target:
+        description: '选择编译的 CLI 平台'
+        default: 'android'
+        type: choice
+        options:
+          - all
+          - android
+          - linux
+          - macos
+          - windows
+      build_docker:
+        description: '是否编译并推送 Docker Image'
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -17,6 +41,7 @@ jobs:
   # Produces: .msi, .exe (Windows) | .dmg, .app (macOS) | .AppImage, .deb (Linux)
   # Also generates and uploads latest.json (the auto-updater manifest)
   desktop:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_desktop == 'true')
     name: Desktop / ${{ matrix.platform.name }}
     strategy:
       fail-fast: false
@@ -136,6 +161,7 @@ jobs:
 
   # ── CLI Binary (9 platforms incl. Android/Termux) ────────────────────────
   cli:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_cli)
     name: CLI / ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -182,40 +208,72 @@ jobs:
             use_cross: true
 
     steps:
+      - name: Determine if target should build
+        id: check_target
+        run: |
+          SHOULD_BUILD="true"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET="${{ github.event.inputs.cli_target }}"
+            MATRIX="${{ matrix.target }}"
+            if [[ "$TARGET" != "all" ]]; then
+              SHOULD_BUILD="false"
+              if [[ "$TARGET" == "android" ]] && [[ "$MATRIX" == *"android"* || "$MATRIX" == *"musl"* ]]; then SHOULD_BUILD="true"; fi
+              if [[ "$TARGET" == "linux" ]] && [[ "$MATRIX" == *"linux"* && "$MATRIX" != *"android"* && "$MATRIX" != *"musl"* ]]; then SHOULD_BUILD="true"; fi
+              if [[ "$TARGET" == "macos" ]] && [[ "$MATRIX" == *"apple"* ]]; then SHOULD_BUILD="true"; fi
+              if [[ "$TARGET" == "windows" ]] && [[ "$MATRIX" == *"windows"* ]]; then SHOULD_BUILD="true"; fi
+            fi
+          fi
+          echo "SHOULD_BUILD=$SHOULD_BUILD" >> $GITHUB_ENV
+
       - uses: actions/checkout@v4
+        if: env.SHOULD_BUILD == 'true'
       - uses: dtolnay/rust-toolchain@stable
+        if: env.SHOULD_BUILD == 'true'
         with:
           targets: ${{ matrix.target }}
       - name: Install build deps (Linux)
-        if: runner.os == 'Linux'
+        if: env.SHOULD_BUILD == 'true' && runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - name: Install cross
-        if: matrix.use_cross
+        if: env.SHOULD_BUILD == 'true' && matrix.use_cross
         run: cargo install cross --locked
       - uses: Swatinem/rust-cache@v2
+        if: env.SHOULD_BUILD == 'true'
         with:
           key: cli-${{ matrix.target }}
       - name: Build CLI (cross)
-        if: matrix.use_cross
+        if: env.SHOULD_BUILD == 'true' && matrix.use_cross
         run: cross build --release --target ${{ matrix.target }} --bin openfang
       - name: Build CLI
-        if: ${{ !matrix.use_cross }}
+        if: env.SHOULD_BUILD == 'true' && !matrix.use_cross
         run: cargo build --release --target ${{ matrix.target }} --bin openfang
+
       - name: Package (Unix)
-        if: matrix.archive == 'tar.gz'
+        if: env.SHOULD_BUILD == 'true' && matrix.archive == 'tar.gz'
         run: |
           cd target/${{ matrix.target }}/release
           tar czf ../../../openfang-${{ matrix.target }}.tar.gz openfang
           cd ../../..
           sha256sum openfang-${{ matrix.target }}.tar.gz > openfang-${{ matrix.target }}.tar.gz.sha256
+
       - name: Package (Windows)
-        if: matrix.archive == 'zip'
+        if: env.SHOULD_BUILD == 'true' && matrix.archive == 'zip'
         shell: pwsh
         run: |
           Compress-Archive -Path "target/${{ matrix.target }}/release/openfang.exe" -DestinationPath "openfang-${{ matrix.target }}.zip"
           $hash = (Get-FileHash "openfang-${{ matrix.target }}.zip" -Algorithm SHA256).Hash.ToLower()
           "$hash  openfang-${{ matrix.target }}.zip" | Out-File -Encoding ASCII "openfang-${{ matrix.target }}.zip.sha256"
+
+      - name: Upload Artifact to Github Actions
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openfang-cli-${{ matrix.target }}
+          path: openfang-${{ matrix.target }}.*
+          retention-days: 7
+
       - name: Upload to GitHub Release
+        if: env.SHOULD_BUILD == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: openfang-${{ matrix.target }}.*
@@ -224,6 +282,7 @@ jobs:
 
   # ── Docker (linux/amd64 + linux/arm64) ────────────────────────────────────
   docker:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_docker)
     name: Docker Image
     runs-on: ubuntu-latest
     steps:
