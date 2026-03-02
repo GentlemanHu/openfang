@@ -244,6 +244,8 @@ jobs:
           key: cli-${{ matrix.target }}
       - name: Build CLI (cross)
         if: env.SHOULD_BUILD == 'true' && matrix.use_cross
+        env:
+          RUSTFLAGS: "-C link-arg=-Wl,--hash-style=both"
         run: cross build --release --target ${{ matrix.target }} --bin openfang
       - name: Build CLI
         if: env.SHOULD_BUILD == 'true' && !matrix.use_cross
