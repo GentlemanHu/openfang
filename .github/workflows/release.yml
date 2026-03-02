@@ -210,6 +210,7 @@ jobs:
     steps:
       - name: Determine if target should build
         id: check_target
+        shell: bash
         run: |
           SHOULD_BUILD="true"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then

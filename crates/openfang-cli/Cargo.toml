@@ -31,3 +31,6 @@ openfang-runtime = { path = "../openfang-runtime" }
 uuid = { workspace = true }
 ratatui = { workspace = true }
 colored = { workspace = true }
+
+[target.'cfg(any(target_os = "android", target_env = "musl"))'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
