@@ -1,0 +1,4 @@
+FROM ghcr.io/cross-rs/aarch64-linux-android:main
+ENV ANDROID_API=21
+ENV ANDROID_API_aarch64_linux_android=21
+ENV ANDROID_API_aarch64_unknown_linux_gnu=21

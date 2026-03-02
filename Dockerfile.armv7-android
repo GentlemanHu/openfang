@@ -1,0 +1,4 @@
+FROM ghcr.io/cross-rs/armv7-linux-androideabi:main
+ENV ANDROID_API=21
+ENV ANDROID_API_armv7_linux_androideabi=21
+ENV ANDROID_API_arm_unknown_linux_gnueabi=21
