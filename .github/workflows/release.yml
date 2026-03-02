@@ -134,7 +134,7 @@ jobs:
           projectPath: crates/openfang-desktop
           args: ${{ matrix.platform.args }}
 
-  # ── CLI Binary (5 platforms) ──────────────────────────────────────────────
+  # ── CLI Binary (9 platforms incl. Android/Termux) ────────────────────────
   cli:
     name: CLI / ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
@@ -145,21 +145,41 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
             archive: tar.gz
+            use_cross: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             archive: tar.gz
+            use_cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
             archive: tar.gz
+            use_cross: false
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
+            use_cross: false
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             archive: zip
+            use_cross: false
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             archive: zip
+            use_cross: false
+          # Android / Termux targets
+          - target: aarch64-linux-android
+            os: ubuntu-22.04
+            archive: tar.gz
+            use_cross: true
+          - target: armv7-linux-androideabi
+            os: ubuntu-22.04
+            archive: tar.gz
+            use_cross: true
+          # Static Linux (musl) - also works in Termux
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+            archive: tar.gz
+            use_cross: true
 
     steps:
       - uses: actions/checkout@v4
@@ -169,17 +189,17 @@ jobs:
       - name: Install build deps (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
-      - name: Install cross (Linux aarch64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
+      - name: Install cross
+        if: matrix.use_cross
         run: cargo install cross --locked
       - uses: Swatinem/rust-cache@v2
         with:
           key: cli-${{ matrix.target }}
       - name: Build CLI (cross)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        if: matrix.use_cross
         run: cross build --release --target ${{ matrix.target }} --bin openfang
       - name: Build CLI
-        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }} --bin openfang
       - name: Package (Unix)
         if: matrix.archive == 'tar.gz'
