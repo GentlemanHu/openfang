@@ -124,8 +124,10 @@ regex-lite = "0.1"
 
 # Email (SMTP + IMAP)
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
-imap = "2"
-native-tls = "0.2"
+imap = { version = "3.0.0-alpha.15", default-features = false, features = ["rustls-tls"] }
+rustls = "0.23"
+rustls-pki-types = "1"
+rustls-native-certs = "0.8"
 mailparse = "0.15"
 
 # Testing

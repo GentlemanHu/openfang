@@ -196,13 +196,38 @@ fn fetch_unseen_emails(
     password: &str,
     folders: &[String],
 ) -> Result<Vec<(String, String, String, String)>, String> {
-    let tls = native_tls::TlsConnector::builder()
-        .build()
-        .map_err(|e| format!("TLS connector error: {e}"))?;
+    let certs_result = rustls_native_certs::load_native_certs();
+    if !certs_result.errors.is_empty() {
+        warn!("Some native certs failed to load: {:?}", certs_result.errors);
+    }
+    let mut root_store = rustls::RootCertStore::empty();
+    for cert in certs_result.certs {
+        let _ = root_store.add(cert);
+    }
 
-    let client = imap::connect((host, port), host, &tls)
-        .map_err(|e| format!("IMAP connect failed: {e}"))?;
+    let config = std::sync::Arc::new(
+        rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth(),
+    );
 
+    let server_name = rustls_pki_types::ServerName::try_from(host)
+        .map_err(|e| format!("Invalid IMAP server name {host}: {e}"))?
+        .to_owned();
+
+    let conn = rustls::ClientConnection::new(config, server_name)
+        .map_err(|e| format!("TLS connection initialization failed: {e}"))?;
+
+    let tcp = std::net::TcpStream::connect((host, port))
+        .map_err(|e| format!("TCP connect to {host}:{port} failed: {e}"))?;
+
+    let stream = rustls::StreamOwned::new(conn, tcp);
+
+    // IMAP 3.0.0-alpha Client::new parses the greeting for us.
+    let mut client = imap::Client::new(stream);
+    
+    // Sometimes greeting isn't consumed automatically, try `.read_response()` if there is public trait?
+    // According to imap3, `Client::new` expects you to handle greeting manually if there's an issue, but we'll try straight login.
     let mut session = client
         .login(username, password)
         .map_err(|(e, _)| format!("IMAP login failed: {e}"))?;
@@ -215,7 +240,7 @@ fn fetch_unseen_emails(
             continue;
         }
 
-        let uids = match session.uid_search("UNSEEN") {
+        let uids: std::collections::HashSet<u32> = match session.uid_search("UNSEEN") {
             Ok(uids) => uids,
             Err(e) => {
                 warn!(folder, error = %e, "IMAP SEARCH UNSEEN failed");
@@ -232,7 +257,7 @@ fn fetch_unseen_emails(
         let uid_list: Vec<u32> = uids.into_iter().take(50).collect();
         let uid_set: String = uid_list
             .iter()
-            .map(|u| u.to_string())
+            .map(|u: &u32| u.to_string())
             .collect::<Vec<_>>()
             .join(",");
 

@@ -32,5 +32,6 @@ uuid = { workspace = true }
 ratatui = { workspace = true }
 colored = { workspace = true }
 
+# Remove Openssl target_os="android" and _env="musl" dependencies
 [target.'cfg(any(target_os = "android", target_env = "musl"))'.dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
+# Left empty as we migrated away from openssl to rustls
