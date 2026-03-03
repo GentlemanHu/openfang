@@ -24,6 +24,21 @@ use std::sync::atomic::AtomicBool;
 #[cfg(windows)]
 use std::sync::atomic::Ordering;
 
+/// Stub out `__register_atfork` for Android/Termux compatibility.
+/// When cross-compiling with vendored OpenSSL, the C compiler might link against newer
+/// Android API headers (>= 23) that expect this symbol. This causes `CANNOT LINK EXECUTABLE`
+/// on older Android devices (or some Termux environments).
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "C" fn __register_atfork(
+    _prepare: Option<extern "C" fn()>,
+    _parent: Option<extern "C" fn()>,
+    _child: Option<extern "C" fn()>,
+    _dso_handle: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    0
+}
+
 /// Global flag set by the Ctrl+C handler.
 static CTRLC_PRESSED: AtomicBool = AtomicBool::new(false);
 
