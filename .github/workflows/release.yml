@@ -41,7 +41,7 @@ jobs:
   # Produces: .msi, .exe (Windows) | .dmg, .app (macOS) | .AppImage, .deb (Linux)
   # Also generates and uploads latest.json (the auto-updater manifest)
   desktop:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_desktop == 'true')
+    if: false # Disabled in this fork since no code signing / CI secrets are available
     name: Desktop / ${{ matrix.platform.name }}
     strategy:
       fail-fast: false
@@ -285,7 +285,7 @@ jobs:
 
   # ── Docker (linux/amd64 + linux/arm64) ────────────────────────────────────
   docker:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_docker)
+    if: false # Disabled in this fork since no GHCR credentials are available
     name: Docker Image
     runs-on: ubuntu-latest
     steps:
